@@ -41,5 +41,14 @@ public class Marker extends ItemizedOverlay<OverlayItem> implements Serializable
 	 public int size() {
 	  return overlayItemList.size();
 	 }
-
+	 
+	 @Override
+	 protected boolean onTap(int index){
+		try{
+			overlayItemList.remove(index);
+		}catch(Exception e){
+			return false;
+		}
+		return true; 
+	 }
 }

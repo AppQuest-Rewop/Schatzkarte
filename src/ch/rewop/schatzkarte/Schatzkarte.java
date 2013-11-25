@@ -25,6 +25,7 @@ import org.osmdroid.util.GeoPoint;
 import org.osmdroid.*;
 
 import org.osmdroid.views.MapView;
+import org.osmdroid.views.overlay.OverlayItem;
 import org.osmdroid.views.overlay.TilesOverlay;
 
 import android.location.Location;
@@ -33,6 +34,7 @@ import android.location.LocationManager;
 import android.os.Bundle;
 import android.os.Environment;
 import android.app.Activity;
+import android.content.Context;
 import android.graphics.Color;
 import android.graphics.drawable.Drawable;
 import android.util.Log;
@@ -46,6 +48,7 @@ public class Schatzkarte extends Activity implements LocationListener {
 	private IMapController mapController;
 	private GeoPoint momPosition;
 	private Marker marker;
+	private static final String FILENAME = "Schatzkarte_Marker.txt";
 	
 	private LocationManager locationManager;
 
@@ -145,12 +148,14 @@ public class Schatzkarte extends Activity implements LocationListener {
 	protected void onStop(){
 		super.onStop();
 		try{
-        	File markerfile = new File(getFilesDir(), "Schatzkarte_Marker.txt");
-        	FileOutputStream fos = new FileOutputStream(markerfile);
+        	FileOutputStream fos = openFileOutput(FILENAME, Context.MODE_PRIVATE);
         	ObjectOutputStream o = new ObjectOutputStream(fos);
         	
-        
-        	o.writeObject(marker);
+        	o.writeObject(marker.size());
+        	for(int i = 0; i < marker.size(); i++){
+        		o.writeObject(marker.createItem(i).getPoint());
+        	}
+        	
         	fos.close();
         }
         catch(Exception e){
@@ -161,25 +166,30 @@ public class Schatzkarte extends Activity implements LocationListener {
 	@Override
 	protected void onStart(){
 		super.onStart();
+		
 		//Marker---------------------------------------------------
+		Drawable symbol = getResources().getDrawable(android.R.drawable.star_big_on);
+      	int markerWidth = symbol.getIntrinsicWidth();
+      	int markerHeight = symbol.getIntrinsicHeight();
+      	symbol.setBounds(0, markerHeight, markerWidth, 0);
+              
+        ResourceProxy resourceProxy = new DefaultResourceProxyImpl(getApplicationContext());
+        marker = new Marker(symbol, resourceProxy);
+
         try{
-        	File markerfile = new File(getFilesDir(), "Schatzkarte_Marker.txt");
-        	FileInputStream fis = new FileInputStream(markerfile);
+        	FileInputStream fis = openFileInput(FILENAME);
         	ObjectInputStream o = new ObjectInputStream(fis);
         	
-        	marker = (Marker)o.readObject();
+        	int max = (Integer) o.readObject();
+        	GeoPoint point; ;
+        	for(int i = 0; i < max ; i++){
+        		point = (GeoPoint)o.readObject();
+        		marker.addItem(point, "", "");
+        	}
         	fis.close();
         }
         catch(Exception e){
         	Log.e(ACTIVITY_SERVICE, e.getMessage());
-        	
-        	Drawable symbol = getResources().getDrawable(android.R.drawable.star_big_on);
-          	int markerWidth = symbol.getIntrinsicWidth();
-          	int markerHeight = symbol.getIntrinsicHeight();
-          	symbol.setBounds(0, markerHeight, markerWidth, 0);
-                  
-            ResourceProxy resourceProxy = new DefaultResourceProxyImpl(getApplicationContext());
-            marker = new Marker(symbol, resourceProxy);
         }
         
         map.getOverlays().add(marker);
