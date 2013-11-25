@@ -1,7 +1,16 @@
 package ch.rewop.schatzkarte;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.util.ArrayList;
+import java.util.List;
 
+import org.osmdroid.api.IGeoPoint;
 import org.osmdroid.api.IMapController;
 import org.osmdroid.tileprovider.MapTileProviderArray;
 import org.osmdroid.tileprovider.MapTileProviderBase;
@@ -12,44 +21,53 @@ import org.osmdroid.tileprovider.modules.MapTileModuleProviderBase;
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory;
 import org.osmdroid.tileprovider.tilesource.XYTileSource;
 import org.osmdroid.tileprovider.util.SimpleRegisterReceiver;
+import org.osmdroid.util.GeoPoint;
 import org.osmdroid.*;
 
 import org.osmdroid.views.MapView;
 import org.osmdroid.views.overlay.TilesOverlay;
 
+import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
 import android.os.Bundle;
 import android.os.Environment;
 import android.app.Activity;
 import android.graphics.Color;
+import android.graphics.drawable.Drawable;
+import android.util.Log;
 import android.view.Menu;
 import android.view.View;
+import android.view.View.OnClickListener;
+import android.widget.Toast;
 
-public class Schatzkarte extends Activity {
+public class Schatzkarte extends Activity implements LocationListener {
 	private MapView map;
+	private IMapController mapController;
+	private GeoPoint momPosition;
+	private Marker marker;
+	
+	private LocationManager locationManager;
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.activity_schatzkarte);
 		
+		//MAP-------------------------------------------------------------
 		map = (MapView) findViewById(R.id.map);
 		map.setTileSource(TileSourceFactory.MAPQUESTOSM);
 		 
 		map.setMultiTouchControls(true);
 		map.setBuiltInZoomControls(true);
 		 
-		IMapController controller = map.getController();
-		controller.setZoom(18);
+		mapController = map.getController();
+		mapController.setZoom(18);
 		 
-		// Die TileSource beschreibt die Eigenschaften der Kacheln die wir anzeigen
 		XYTileSource treasureMapTileSource = new XYTileSource("mbtiles", ResourceProxy.string.offline_mode, 1, 20, 256, ".png", "http://example.org/");
 		 
 		File file = new File(Environment. getExternalStorageDirectory (), "hsr.mbtiles");
-		 
-		/* Das verwenden von mbtiles ist leider ein wenig aufwändig, wir müssen
-		* unsere XYTileSource in verschiedene Klassen 'verpacken' um sie dann
-		* als TilesOverlay über der Grundkarte anzuzeigen.
-		*/
+		
 		MapTileModuleProviderBase treasureMapModuleProvider = new MapTileFileArchiveProvider(new SimpleRegisterReceiver(this),
 		treasureMapTileSource, new IArchiveFile[] { MBTilesFileArchive.getDatabaseFileArchive(file) });
 		 
@@ -59,9 +77,23 @@ public class Schatzkarte extends Activity {
 		TilesOverlay treasureMapTilesOverlay = new TilesOverlay(treasureMapProvider, getBaseContext());
 		treasureMapTilesOverlay.setLoadingBackgroundColor(Color.TRANSPARENT);
 		 
-		// Jetzt können wir den Overlay zu unserer Karte hinzufügen:
+		//Overlay zu Karte hinzufügen
 		map.getOverlays().add(treasureMapTilesOverlay);	
 		
+		//GPS --------------------------------------------------
+		try{
+			locationManager = (LocationManager) this.getSystemService(LOCATION_SERVICE);			
+		}catch(Exception e){
+			Toast.makeText(this, "Kein GPS-Empfänger", Toast.LENGTH_LONG).show();
+		}
+		
+        findViewById(R.id.saveButton).setOnClickListener(new OnClickListener() {
+			
+			@Override
+			public void onClick(View v) {
+				marker.addItem(momPosition, "", "");
+			}
+		});
 	}
 
 	@Override
@@ -69,5 +101,87 @@ public class Schatzkarte extends Activity {
 		// Inflate the menu; this adds items to the action bar if it is present.
 		getMenuInflater().inflate(R.menu.schatzkarte, menu);
 		return true;
+	}
+	
+	@Override
+	protected void onResume(){
+		super.onResume();
+		locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 60000, 0, this);
+		locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 60000, 0, this);
+	}
+	
+	@Override
+	protected void onPause(){
+		super.onPause();
+		locationManager.removeUpdates(this);
+	}
+
+	@Override
+	public void onLocationChanged(Location location) {
+		momPosition = new GeoPoint(location.getLatitude(), location.getLongitude());
+		//Toast.makeText(this, ""+ momPosition.getLongitudeE6() + "/" + momPosition.getLatitudeE6(), Toast.LENGTH_LONG).show();
+		mapController.animateTo(momPosition);
+	}
+
+	@Override
+	public void onProviderDisabled(String provider) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void onProviderEnabled(String provider) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void onStatusChanged(String provider, int status, Bundle extras) {
+		// TODO Auto-generated method stub
+		
+	}
+	
+	@Override
+	protected void onStop(){
+		super.onStop();
+		try{
+        	File markerfile = new File(getFilesDir(), "Schatzkarte_Marker.txt");
+        	FileOutputStream fos = new FileOutputStream(markerfile);
+        	ObjectOutputStream o = new ObjectOutputStream(fos);
+        	
+        
+        	o.writeObject(marker);
+        	fos.close();
+        }
+        catch(Exception e){
+        	Toast.makeText(this,""+ e.getMessage(), Toast.LENGTH_LONG).show();
+        }
+	}
+	
+	@Override
+	protected void onStart(){
+		super.onStart();
+		//Marker---------------------------------------------------
+        try{
+        	File markerfile = new File(getFilesDir(), "Schatzkarte_Marker.txt");
+        	FileInputStream fis = new FileInputStream(markerfile);
+        	ObjectInputStream o = new ObjectInputStream(fis);
+        	
+        	marker = (Marker)o.readObject();
+        	fis.close();
+        }
+        catch(Exception e){
+        	Log.e(ACTIVITY_SERVICE, e.getMessage());
+        	
+        	Drawable symbol = getResources().getDrawable(android.R.drawable.star_big_on);
+          	int markerWidth = symbol.getIntrinsicWidth();
+          	int markerHeight = symbol.getIntrinsicHeight();
+          	symbol.setBounds(0, markerHeight, markerWidth, 0);
+                  
+            ResourceProxy resourceProxy = new DefaultResourceProxyImpl(getApplicationContext());
+            marker = new Marker(symbol, resourceProxy);
+        }
+        
+        map.getOverlays().add(marker);
 	}
 }
