@@ -35,12 +35,17 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.app.Activity;
 import android.content.Context;
+import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.drawable.Drawable;
 import android.util.Log;
 import android.view.Menu;
+import android.view.MenuItem;
 import android.view.View;
+import android.view.MenuItem.OnMenuItemClickListener;
 import android.view.View.OnClickListener;
+import android.widget.EditText;
 import android.widget.Toast;
 
 public class Schatzkarte extends Activity implements LocationListener {
@@ -51,6 +56,8 @@ public class Schatzkarte extends Activity implements LocationListener {
 	private static final String FILENAME = "Schatzkarte_Marker.txt";
 	
 	private LocationManager locationManager;
+	
+	private static final int SCAN_QR_CODE_REQUEST_CODE = 0;
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -99,13 +106,6 @@ public class Schatzkarte extends Activity implements LocationListener {
 		});
 	}
 
-	@Override
-	public boolean onCreateOptionsMenu(Menu menu) {
-		// Inflate the menu; this adds items to the action bar if it is present.
-		getMenuInflater().inflate(R.menu.schatzkarte, menu);
-		return true;
-	}
-	
 	@Override
 	protected void onResume(){
 		super.onResume();
@@ -194,4 +194,48 @@ public class Schatzkarte extends Activity implements LocationListener {
         
         map.getOverlays().add(marker);
 	}
+	
+	@Override
+	public boolean onCreateOptionsMenu(Menu menu) {
+		MenuItem menuItem = menu.add("Koordinaten an Logbuch");
+		menuItem.setOnMenuItemClickListener(new OnMenuItemClickListener() {
+
+			@Override
+			public boolean onMenuItemClick(MenuItem item) {
+					sendlog();
+					return true;
+			}
+		});
+
+		return super.onCreateOptionsMenu(menu);
+	}
+	
+	//eintrag in logbuch
+		private void sendlog() {
+			Intent intent = new Intent("ch.appquest.intent.LOG");
+			 
+			if (getPackageManager().queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY).isEmpty()) {
+				Toast.makeText(this, "Logbook App not Installed", Toast.LENGTH_LONG).show();
+				return;
+			}
+			
+			String code = "";
+			
+			for(int i = 0; i < marker.size(); i++){
+				if(!(i == 0)){
+					code += ", ";
+				}
+				code += "(";
+        		code += marker.createItem(i).getPoint().getLatitudeE6();
+				code += "/";
+				code += marker.createItem(i).getPoint().getLongitudeE6();
+				code += ")";
+				
+        	}
+			
+			intent.putExtra("ch.appquest.taskname", "REWOP.Schatzkarte");
+			intent.putExtra("ch.appquest.logmessage", code);
+			 
+			startActivity(intent);
+		}
 }
